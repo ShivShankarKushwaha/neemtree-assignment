@@ -33,23 +33,23 @@ module.exports = {
         }
 
         const rows = await readXlsxFile(uploadedFile.data);
+
         // finding non empty rows
         const nonEmptyData = rows.filter(row => row.some(cell => cell !== null && cell !== ''));
+
         // finding unique rows
         const uniquedata = findUniqueObjects(nonEmptyData);
-        console.log('uniquedata', uniquedata);
         console.log('array rendering');
-        const alldata = [];
+
         // removing header row
         const validdata = uniquedata.slice(1);
         await async.eachSeries(validdata, async (row) =>
         {
-            const mobileNumber = Number(row[2]);
-            console.log('mobileNumber', mobileNumber, row[2]);
+            console.log('mobileNumber', row[2]);
             const data = {
                 'Name of the Candidate': row[0],
                 'Email': row[1],
-                'Mobile No.': mobileNumber || null,
+                'Mobile No.': row[2],
                 'Date of Birth': row[3],
                 'Work Experience': row[4],
                 'Resume Title': row[5],
@@ -62,13 +62,15 @@ module.exports = {
             let checkalready = await ExcelData.findOne({ 'Email': row[1] });
             console.log('checkalready', checkalready);
             if (!checkalready) {
-                alldata.push(data);
+                try {
+                    let response = await ExcelData.create(data);
+                    console.log('response', response);
+                } catch (error) {
+                    return response.status(400).json({ error: error});
+                }
             }
         });
 
-        // console.log('alldata', alldata);
-        let filldata = await ExcelData.insertMany(alldata);
-        console.log('filldata', filldata);
         res.status(200).json({ message: 'Excel data parsed successfully' });
 
     }
