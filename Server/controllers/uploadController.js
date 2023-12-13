@@ -1,81 +1,76 @@
-// controller/uploadController.js
-const readXlsxFile = require('read-excel-file/node');
-const ExcelData = require('../models/database'); // Update the path based on your folder structure
+const readExcelFile = require('read-excel-file/node');
+const CandidateModel = require('../models/database_Schema');
 const async = require('async');
-function findUniqueObjects(arr)
+
+function removeDuplicateEmailsAndReturnUniqueEntries(entries)
 {
-    const uniqueObjects = new Set();
-    const newarr = [];
-    arr.forEach(obj =>
+    const uniqueEmails = new Set();
+    const uniqueEntries = [];
+
+    entries.forEach(entry =>
     {
-        const  Email  = obj[1];
-        console.log('Email', Email);
-        if (!uniqueObjects.has(Email)) {
-            newarr.push(obj);
-            uniqueObjects.add(Email);
+        const email = entry[1];
+        console.log('Unique Email:', email);
+
+        if (!uniqueEmails.has(email)) {
+            uniqueEntries.push(entry);
+            uniqueEmails.add(email);
         }
     });
 
-    return newarr;
+    return uniqueEntries;
 }
+
 module.exports = {
-    upload: async (req, res) =>
+    handleExcelUpload: async (req, res) =>
     {
-        if (!req.files || Object.keys(req.files).length === 0) {
-            return res.status(400).send('No files were uploaded.');
-        }
+        try {
+            const uploadedFile = req.files.file[0];
+            console.log('Uploaded File Mimetype:', uploadedFile.mimetype);
 
-        let uploadedFile = req.files.file[0];
-        console.log('mimetype', uploadedFile.mimetype);
-
-        if (uploadedFile.mimetype !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' && uploadedFile.mimetype !== 'application/vnd.ms-excel') {
-            return res.status(400).send('Please upload an Excel file.');
-        }
-
-        const rows = await readXlsxFile(uploadedFile.data);
-
-        // finding non empty rows
-        const nonEmptyData = rows.filter(row => row.some(cell => cell !== null && cell !== ''));
-
-        // finding unique rows
-        const uniquedata = findUniqueObjects(nonEmptyData);
-        console.log('array rendering');
-
-        // removing header row
-        const validdata = uniquedata.slice(1);
-        await async.eachSeries(validdata, async (row) =>
-        {
-            console.log('mobileNumber', row[2]);
-            const data = {
-                'Name of the Candidate': row[0],
-                'Email': row[1],
-                'Mobile No.': row[2],
-                'Date of Birth': row[3],
-                'Work Experience': row[4],
-                'Resume Title': row[5],
-                'Current Location': row[6],
-                'Postal Address': row[7],
-                'Current Employer': row[8],
-                'Current Designation': row[9]
-            };
-
-            let checkalready = await ExcelData.findOne({ 'Email': row[1] });
-            console.log('checkalready', checkalready);
-            if (!checkalready) {
-                try {
-                    let response = await ExcelData.create(data);
-                    console.log('response', response);
-                } catch (error) {
-                    return response.status(400).json({ error: error});
-                }
+            if (!uploadedFile || !uploadedFile.mimetype.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')) {
+                return res.status(400).send('Please upload a valid Excel file.');
             }
-        });
 
-        res.status(200).json({ message: 'Excel data parsed successfully' });
+            const excelRows = await readExcelFile(uploadedFile.data);
 
+            const nonEmptyRows = excelRows.filter(row => row.some(cell => cell !== null && cell !== ''));
+
+            const uniqueDataEntries = removeDuplicateEmailsAndReturnUniqueEntries(nonEmptyRows);
+            console.log('Unique Entries:', uniqueDataEntries);
+
+            const validEntries = uniqueDataEntries.slice(1);
+
+            await async.eachSeries(validEntries, async (row) =>
+            {
+                console.log('Candidate Mobile Number:', row[2]);
+
+                const candidateData = {
+                    'Name of the Candidate': row[0],
+                    'Email': row[1],
+                    'Mobile No.': row[2],
+                    'Date of Birth': row[3],
+                    'Work Experience': row[4],
+                    'Resume Title': row[5],
+                    'Current Location': row[6],
+                    'Postal Address': row[7],
+                    'Current Employer': row[8],
+                    'Current Designation': row[9]
+                };
+
+                const existingCandidate = await CandidateModel.findOne({ 'Email': row[1] });
+                console.log('Existing Candidate:', existingCandidate);
+
+                if (!existingCandidate) {
+                    const newCandidate = await CandidateModel.create(candidateData);
+                    console.log('New Candidate Created:', newCandidate);
+                }
+            });
+
+            res.status(200).json({ message: 'Excel data parsed successfully' });
+        } catch (error) {
+            console.error('Error processing Excel data:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
     }
 };
-
-
-
-

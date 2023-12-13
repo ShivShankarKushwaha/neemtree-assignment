@@ -1,4 +1,3 @@
-// models/database.js
 const mongoose = require('mongoose');
 const config = require('../config/config');
 mongoose.connect(config.mongo_link).then(console.log('database connected')).catch((err) => console.log('database err', err))
@@ -18,5 +17,5 @@ const schema = new mongoose.Schema({
     'Current Designation': String
 })
 
-const data = mongoose.model('data', schema);
-module.exports = data;
+const Model = mongoose.model('data', schema);
+module.exports = Model;
